@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "immintrin.h"
+#include "avxintrin.h"
 
 class SIMDNumber {
 public:
