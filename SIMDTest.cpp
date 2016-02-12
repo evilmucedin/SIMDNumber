@@ -36,6 +36,21 @@ struct Config {
     float lambda2_;
 };
 
+struct SIMDConfig {
+    SIMDNumber alpha_;
+    SIMDNumber beta_;
+    SIMDNumber lambda1_;
+    SIMDNumber lambda2_;
+
+    SIMDConfig(const Config& c)
+        : alpha_(c.alpha_)
+        , beta_(c.beta_)
+        , lambda1_(c.lambda1_)
+        , lambda2_(c.lambda2_)
+    {
+    }
+};
+
 struct ScopedTimer {
     string message_;
     chrono::high_resolution_clock::time_point begin_;
@@ -78,9 +93,35 @@ inline void update(const float& g,
   }
 }
 
+inline void update(const SIMDNumber& g,
+                   SIMDNumber& z,
+                   SIMDNumber& n,
+                   SIMDNumber& weight,
+                   const SIMDConfig& featureConfig) {
+  SIMDNumber g2 = g * g;
+  SIMDNumber sigma = ((n + g2).sqrt() - n.sqrt()) / featureConfig.alpha_;
+  z += g - sigma * weight;
+  n += g2;
+  /*
+  const SIMDNumber newWeight =
+      std::abs(z) <= featureConfig.lambda1_
+          ? 0
+          : (sign(z) * featureConfig.lambda1_ - z) /
+                ((featureConfig.beta_ + sqrt(n)) / featureConfig.alpha_ +
+                 featureConfig.lambda2_);
+  if (std::isnan(newWeight) || std::isinf(newWeight)) {
+    throw exception();
+  } else {
+    weight = newWeight;
+  }
+  */
+}
+
 int main() {
     SIMDNumber x(0, 1, 2, 3, 4, 5, 6, 7);
     std::cout << x << std::endl;
+    SIMDNumber y(0, 1, 2, 3, 4, 5, 6, 7);
+
 
     static const size_t N = 1024*1024;
     vector<Gradient> data(N);
@@ -98,6 +139,44 @@ int main() {
     c.lambda2_ = 0.03f;
 
     static const size_t M = 100;
+
+    {
+        float sum = 0.f;
+        vector<Gradient> copy(data);
+        {
+            ScopedTimer tOld("New");
+            static const size_t N8 = N / 8;
+            SIMDNumber g;
+            SIMDNumber z;
+            SIMDNumber n;
+            SIMDNumber weight;
+            float fg[8];
+            float fz[8];
+            float fn[8];
+            float fweight[8];
+            SIMDConfig sc(c);
+            for (size_t j = 0; j < M; ++j) {
+                for (size_t i = 0; i < N8; ++i) {
+                    for (size_t k = 0; k < 8; ++k) {
+                        const auto& gk = copy[8*i + k];
+                        fg[k] = gk.g_;
+                        fz[k] = gk.z_;
+                        fn[k] = gk.n_;
+                        fweight[k] = gk.weight_;
+                    }
+                    g.init(fg);
+                    z.init(fz);
+                    n.init(fn);
+                    weight.init(fweight);
+                    update(g, z, n, weight, sc);
+                    for (size_t k = 0; k < 8; ++k) {
+                        sum += weight[k];
+                    }
+                }
+            }
+        }
+        cout << "sum: " << sum << endl;
+    }
 
     {
         float sum = 0.f;

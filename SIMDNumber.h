@@ -15,6 +15,41 @@ public:
         data_.simdData_ = _mm256_load_ps(floats);
     }
 
+    SIMDNumber(const float* f) {
+        init(f);
+    }
+
+    SIMDNumber(float value) {
+        data_.simdData_ = _mm256_broadcast_ss(&value);
+    }
+
+    SIMDNumber(const __m256& data)
+    {
+        data_.simdData_ = data;
+    }
+
+    SIMDNumber(__m256&& data)
+    {
+        data_.simdData_ = std::move(data);
+    }
+
+    void init(const float* f) {
+        data_.simdData_ = _mm256_load_ps(f);
+    }
+
+    float operator[](size_t index) const {
+        return data_.floatData_[index];
+    }
+
+    SIMDNumber sqrt() const {
+        return _mm256_sqrt_ps(data_.simdData_);
+    }
+
+    SIMDNumber& operator+=(const SIMDNumber& rhs) {
+        data_.simdData_ = _mm256_add_ps(data_.simdData_, rhs.data_.simdData_);
+        return *this;
+    }
+
 private:
     union Data {
         __m256 simdData_;
@@ -24,7 +59,28 @@ private:
     Data data_;
 
     friend std::ostream& operator<<(std::ostream& os, const SIMDNumber& obj);
+
+    friend SIMDNumber operator*(const SIMDNumber& a, const SIMDNumber& b);
+    friend SIMDNumber operator/(const SIMDNumber& a, const SIMDNumber& b);
+    friend SIMDNumber operator+(const SIMDNumber& a, const SIMDNumber& b);
+    friend SIMDNumber operator-(const SIMDNumber& a, const SIMDNumber& b);
 };
+
+SIMDNumber operator*(const SIMDNumber& a, const SIMDNumber& b) {
+    return _mm256_mul_ps(a.data_.simdData_, b.data_.simdData_);
+}
+
+SIMDNumber operator/(const SIMDNumber& a, const SIMDNumber& b) {
+    return _mm256_div_ps(a.data_.simdData_, b.data_.simdData_);
+}
+
+SIMDNumber operator+(const SIMDNumber& a, const SIMDNumber& b) {
+    return _mm256_add_ps(a.data_.simdData_, b.data_.simdData_);
+}
+
+SIMDNumber operator-(const SIMDNumber& a, const SIMDNumber& b) {
+    return _mm256_sub_ps(a.data_.simdData_, b.data_.simdData_);
+}
 
 std::ostream& operator<<(std::ostream& os, const SIMDNumber& obj) {
     os << "[";
